@@ -1,0 +1,26 @@
+#__nuxt,
+html,
+body {
+    height: 100%;
+}
+
+body {
+    background-color: $primary-bg;
+    margin: 0px;
+    padding: 0px;
+}
+*,
+*:before,
+*:after {
+    box-sizing: border-box;
+    transition: color 0.2s, background-color 0.2s, border-color 0.2s,
+        opacity 0.2s;
+    font-family: "Open Sans", sans-serif;
+    color: $primary-text;
+    user-select: none;
+}
+@mixin flex-center {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
