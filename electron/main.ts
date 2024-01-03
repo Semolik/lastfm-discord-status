@@ -1,7 +1,6 @@
 import { app, BrowserWindow, ipcMain, shell } from "electron";
 import path from "path";
-const ipc = ipcMain;
-
+var LastFmNode = require("lastfm").LastFmNode;
 // The built directory structure
 //
 // ├─┬ dist-electron
@@ -40,9 +39,27 @@ function bootstrap() {
         win.loadFile(path.join(process.env.VITE_PUBLIC!, "index.html"));
     }
     win.webContents.setWindowOpenHandler((details) => {
-        require("electron").shell.openExternal(details.url);
+        shell.openExternal(details.url);
         return { action: "deny" };
     });
 }
 
 app.whenReady().then(bootstrap);
+var lastfm;
+ipcMain.on("app-ready", (event, arg) => {
+    lastfm = new LastFmNode({
+        api_key: arg.apiKey,
+        secret: "",
+    });
+
+    var trackStream = lastfm.stream(arg.username);
+
+    trackStream.on("nowPlaying", function (track) {
+        console.log("Now playing: " + track.name);
+    });
+    trackStream.on("stoppedPlaying", function (track) {
+        console.log("Stopped playing: " + track.name);
+    });
+
+    trackStream.start();
+});

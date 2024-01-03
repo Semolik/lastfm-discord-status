@@ -36,7 +36,7 @@
             :color="dataChanged ? 'green' : 'gray'"
             :disabled="!dataChanged"
             size="md"
-            class="mt-auto"
+            class="mt-auto w-min"
             @click="saveData"
         >
             Сохранить
@@ -45,12 +45,10 @@
 </template>
 
 <script setup>
-import { onMounted } from "vue";
 import { ipcRenderer } from "electron";
-import fs from "node:fs";
 const hideApiKey = ref(true);
 const apiKey = useLocalStorage("lastfm-api-key", "");
-const nickname = useLocalStorage("lastfm-nickname", "");
+const nickname = useLocalStorage("lastfm-username", "");
 const apiKeyTemp = ref(apiKey.value);
 const nicknameTemp = ref(nickname.value);
 const dataChanged = computed(
@@ -62,9 +60,9 @@ const saveData = () => {
     if (!dataChanged.value) return;
     apiKey.value = apiKeyTemp.value;
     nickname.value = nicknameTemp.value;
+    ipcRenderer.send("app-ready", {
+        apiKey: apiKey.value,
+        username: nickname.value,
+    });
 };
-onMounted(() => {
-    console.log("ipcRenderer:", ipcRenderer);
-    console.log("fs:", fs);
-});
 </script>
