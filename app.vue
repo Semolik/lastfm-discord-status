@@ -3,18 +3,26 @@
         <app-aside />
         <nuxt-page />
     </div>
+
+    <UNotifications />
 </template>
 <script setup>
-import { onMounted } from "vue";
 import { ipcRenderer } from "electron";
-onMounted(() => {
-    const apiKey = localStorage.getItem("lastfm-api-key");
-    const username = localStorage.getItem("lastfm-username");
-    if (!apiKey || !username) return;
-    ipcRenderer.send("app-ready", {
-        apiKey: apiKey,
-        username: apiKey,
-    });
+
+const toast = useToast();
+
+ipcRenderer.on("error", (event, arg) => {
+    toast.add({ title: arg.message, color: "red" });
+});
+ipcRenderer.on("error-username", (event, arg) => {
+    if (usernameErrored.value) return;
+    usernameErrored.value = true;
+    toast.add({ title: "Пользователь не найден", color: "red" });
+});
+ipcRenderer.on("error-api-key", (event, arg) => {
+    if (apiKeyErrored.value) return;
+    apiKeyErrored.value = true;
+    toast.add({ title: "Неверный API-ключ", color: "red" });
 });
 </script>
 <style lang="scss" scoped>

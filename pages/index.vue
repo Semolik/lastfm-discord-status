@@ -29,7 +29,7 @@
         <app-input
             placeholder="last.fm/user/your_name_here"
             label="Last.fm nickname"
-            v-model="nicknameTemp"
+            v-model="usernameTemp"
         />
 
         <UButton
@@ -47,22 +47,25 @@
 <script setup>
 import { ipcRenderer } from "electron";
 const hideApiKey = ref(true);
-const apiKey = useLocalStorage("lastfm-api-key", "");
-const nickname = useLocalStorage("lastfm-username", "");
+const credentials = ipcRenderer.sendSync("read-credentials");
+console.log(credentials);
+const apiKey = ref(credentials.apiKey);
+const username = ref(credentials.username);
 const apiKeyTemp = ref(apiKey.value);
-const nicknameTemp = ref(nickname.value);
+const usernameTemp = ref(username.value);
+
 const dataChanged = computed(
     () =>
         apiKeyTemp.value !== apiKey.value ||
-        nicknameTemp.value !== nickname.value
+        usernameTemp.value !== username.value
 );
 const saveData = () => {
     if (!dataChanged.value) return;
     apiKey.value = apiKeyTemp.value;
-    nickname.value = nicknameTemp.value;
-    ipcRenderer.send("app-ready", {
+    username.value = usernameTemp.value;
+    ipcRenderer.send("update-credentials", {
         apiKey: apiKey.value,
-        username: nickname.value,
+        username: username.value,
     });
 };
 </script>

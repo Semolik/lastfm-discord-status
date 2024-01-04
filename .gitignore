@@ -23,3 +23,4 @@ logs
 !.env.example
 release
 dist-electron
+credentials.json
