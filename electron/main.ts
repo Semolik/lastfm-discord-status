@@ -1,18 +1,11 @@
 import { app, BrowserWindow, ipcMain, shell } from "electron";
 import path from "path";
 import fs from "fs";
-
-var LastFmNode = require("lastfm").LastFmNode;
-// The built directory structure
-//
-// ├─┬ dist-electron
-// │ ├─┬ main
-// │ │ └── index.js
-// │ ├─┬ preload
-// │ │ └── index.js
-// │ ├─┬ renderer
-// │ │ └── index.html
-
+const LastFmNode = require("lastfm").LastFmNode;
+const client = require("discord-rich-presence")("1192427927074259038");
+client.on("connected", () => {
+    console.log("connected!");
+});
 process.env.ROOT = path.join(__dirname, "..");
 process.env.DIST = path.join(process.env.ROOT, "dist-electron");
 process.env.VITE_PUBLIC = process.env.VITE_DEV_SERVER_URL
@@ -47,6 +40,22 @@ const readCredentials = () => {
     };
 };
 
+const updatePresence = (track: any) => {
+    client.updatePresence({
+        details: track.name,
+        state: track.album["#text"],
+        largeImageKey: track.image.at(-1)["#text"],
+        instance: true,
+        url: track.url,
+        buttons: [
+            {
+                url: track.url,
+                label: "Открыть",
+            },
+        ],
+    });
+};
+
 function bootstrap() {
     win = new BrowserWindow({
         webPreferences: {
@@ -69,6 +78,7 @@ function bootstrap() {
     });
 
     var trackStream;
+    var interval;
     const stream = (username?: string, apiKey?: string) => {
         if (!username || !apiKey) {
             return;
@@ -76,7 +86,9 @@ function bootstrap() {
         if (trackStream) {
             trackStream.stop();
         }
-
+        if (interval) {
+            clearInterval(interval);
+        }
         var lastfm = new LastFmNode({
             api_key: apiKey,
             secret: "",
@@ -84,12 +96,16 @@ function bootstrap() {
 
         trackStream = lastfm.stream(username);
 
-        trackStream.on("nowPlaying", function (track) {
-            console.log("Now playing: " + track.name);
+        trackStream.on("nowPlaying", async function (track) {
+            if (interval) {
+                clearInterval(interval);
+            }
+            updatePresence(track);
+            interval = setInterval(() => {
+                updatePresence(track);
+            }, 1000 * 15);
         });
-        trackStream.on("stoppedPlaying", function (track) {
-            console.log("Stopped playing: " + track.name);
-        });
+
         trackStream.on("error", function (error) {
             console.log("Error: " + error.message);
             switch (error.message) {
