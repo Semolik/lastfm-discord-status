@@ -1,10 +1,17 @@
 <template>
     <aside>
         <div class="links">
-            <nuxt-link to="/">
-                <Icon name="mdi:lastfm" />
-                <span> Last.fm settings </span>
-            </nuxt-link>
+            <UChip
+                class="flex"
+                :show="usernameErrored || apiKeyErrored"
+                color="red"
+            >
+                <nuxt-link to="/" class="grow">
+                    <Icon name="mdi:lastfm" />
+                    <span> Last.fm settings </span>
+                </nuxt-link>
+            </UChip>
+
             <nuxt-link to="/discord">
                 <Icon name="ic:baseline-discord" />
                 <span> Discord settings </span>
@@ -18,7 +25,7 @@
 </template>
 <style lang="scss" scoped>
 aside {
-    width: 250px;
+    min-width: 250px;
     background-color: $secondary-bg;
     padding: 20px 10px;
     display: flex;

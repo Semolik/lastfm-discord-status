@@ -48,7 +48,6 @@
 import { ipcRenderer } from "electron";
 const hideApiKey = ref(true);
 const credentials = ipcRenderer.sendSync("read-credentials");
-console.log(credentials);
 const apiKey = ref(credentials.apiKey);
 const username = ref(credentials.username);
 const apiKeyTemp = ref(apiKey.value);
@@ -63,6 +62,8 @@ const saveData = () => {
     if (!dataChanged.value) return;
     apiKey.value = apiKeyTemp.value;
     username.value = usernameTemp.value;
+    usernameErrored.value = false;
+    apiKeyErrored.value = false;
     ipcRenderer.send("update-credentials", {
         apiKey: apiKey.value,
         username: username.value,

@@ -2,16 +2,7 @@
     <div class="input">
         <div class="label">{{ label }}</div>
         <div class="input-container">
-            <UInput
-                v-bind="$attrs"
-                size="md"
-                variant="outline"
-                :ui="{ icon: { trailing: { pointer: '' } } }"
-            >
-                <template v-for="(_, slot) of $slots" v-slot:[slot]="scope"
-                    ><slot :name="slot" v-bind="scope"
-                /></template>
-            </UInput>
+            <slot />
             <slot name="after" />
         </div>
     </div>

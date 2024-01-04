@@ -24,3 +24,4 @@ logs
 release
 dist-electron
 credentials.json
+config.json
