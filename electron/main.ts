@@ -11,12 +11,12 @@ interface Credentials {
 
 interface Config {
     discordAppName: string;
-    showButton: boolean;
+    button: "off" | "track" | "profile";
 }
 
 const defaultConfig: Config = {
     discordAppName: "defaultDiscordAppID",
-    showButton: true,
+    button: "track",
 };
 const defaultCredentials: Credentials = {
     username: "",
@@ -30,19 +30,19 @@ process.env.VITE_PUBLIC = process.env.VITE_DEV_SERVER_URL
     : path.join(process.env.ROOT, ".output/public");
 process.env["ELECTRON_DISABLE_SECURITY_WARNINGS"] = "true";
 
-const defaultDiscordAppID = "969612309209186354";
-const someMusicDiscordAppID = "970076164947316746";
-const musicDiscordAppID = "974413655649161276";
+const defaultDiscordAppID = "1192427927074259038";
+const playingNowDiscordAppID = "1192746501483544617";
+const musicDiscordAppID = "1192746539915939893";
 const discordAppIdToAppName: Record<string, string> = {
-    defaultDiscordAppID: defaultDiscordAppID,
-    someMusicDiscordAppID: someMusicDiscordAppID,
-    musicDiscordAppID: musicDiscordAppID,
+    defaultDiscordAppID,
+    playingNowDiscordAppID,
+    musicDiscordAppID,
 };
 
 const discordAppNameToAppId: Record<string, string> = {
-    defaultDiscordAppID: "Listening to music",
-    someMusicDiscordAppID: "Some music",
-    musicDiscordAppID: "Music",
+    defaultDiscordAppID: "Слушаю музыку",
+    playingNowDiscordAppID: "Играет сейчас",
+    musicDiscordAppID: "Музыка",
 };
 
 let win: BrowserWindow;
@@ -97,23 +97,38 @@ const updatePresence = (track: any) => {
         stateArray.push(track.album["#text"]);
     }
     const config = readConfig();
+    const username = readCredentials().username;
     rpc_client.updatePresence({
         details: track.name,
         state: stateArray.join(" - "),
         largeImageKey: track.image.at(-1)["#text"],
-        largeImageText:
-            track.playcount > 1 ? `${track.playcount} plays ` : null,
+        largeImageText: getLargeImageText(track.playcount),
         instance: true,
-        url: track.url,
-        buttons: config.showButton
-            ? [
-                  {
-                      url: track.url,
-                      label: "Открыть",
-                  },
-              ]
-            : undefined,
+        buttons:
+            config.button !== "off"
+                ? getButtons(
+                      config.button == "track"
+                          ? track.url
+                          : `https://www.last.fm/user/${username}`
+                  )
+                : undefined,
     });
+};
+
+const getLargeImageText = (playcount: number) => {
+    if (playcount > 1) {
+        return `Прослушано ${playcount} раз${playcount > 4 ? "" : "а"}`;
+    }
+    return undefined;
+};
+
+const getButtons = (url: string) => {
+    return [
+        {
+            url: url,
+            label: "Открыть",
+        },
+    ];
 };
 
 const getTrackInfo = (track: any, lastfm: any, username?: string) => {
@@ -122,6 +137,7 @@ const getTrackInfo = (track: any, lastfm: any, username?: string) => {
             artist: track.artist["#text"],
             track: track.name,
             username: username,
+
             handlers: {
                 success: function (data) {
                     return resolve(data);
@@ -174,25 +190,24 @@ function bootstrap() {
         });
 
         trackStream = lastfm.stream(username);
-
-        trackStream.on("nowPlaying", async function (track) {
+        let updatePresenceLocal: Function | null = null;
+        const stopCurrentPresence = () => {
+            updatePresenceLocal = null;
             if (interval) {
                 clearInterval(interval);
             }
+        };
+        trackStream.on("stoppedPlaying", stopCurrentPresence);
+        trackStream.on("nowPlaying", async function (track) {
+            stopCurrentPresence();
             var trackInfo = await getTrackInfo(track, lastfm, username);
             track = {
                 ...track,
-                playcount: trackInfo?.track?.userplaycount,
+                playcount: trackInfo?.track?.userplaycount || 0,
             };
-            updatePresence(track);
-            interval = setInterval(() => {
-                updatePresence(track);
-            }, 1000 * 15);
-        });
-        trackStream.on("stoppedPlaying", function (track) {
-            if (interval) {
-                clearInterval(interval);
-            }
+            updatePresenceLocal = () => updatePresence(track);
+            updatePresenceLocal();
+            interval = setInterval(updatePresenceLocal, 1000 * 15);
         });
 
         trackStream.on("error", function (error) {

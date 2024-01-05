@@ -8,8 +8,18 @@
                 size="md"
             />
         </app-input-wrapper>
-        <app-input-wrapper label="Показывать кнопку открытия трека">
-            <UToggle v-model="configProxy.showButton" class="mt-1" />
+
+        <app-input-wrapper label="Кнопка">
+            <USelect
+                v-model="configProxy.button"
+                :options="[
+                    { value: 'track', name: 'Ссылка на трек' },
+                    { value: 'profile', name: 'Ссылка на профиль last.fm' },
+                    { value: 'off', name: 'Cкрыть' },
+                ]"
+                option-attribute="name"
+                size="md"
+            />
         </app-input-wrapper>
     </app-page>
 </template>
