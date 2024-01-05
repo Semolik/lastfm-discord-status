@@ -1,5 +1,5 @@
 <template>
-    <app-page title="Last.fm settings">
+    <app-page title="Настройки last.fm">
         <app-input
             placeholder="API key"
             label="API key"
@@ -28,7 +28,7 @@
         </app-input>
         <app-input
             placeholder="last.fm/user/your_name_here"
-            label="Last.fm nickname"
+            label="Имя пользователя на last.fm"
             v-model="usernameTemp"
         />
 

@@ -4,6 +4,25 @@ import fs from "fs";
 const LastFmNode = require("lastfm").LastFmNode;
 const client = require("discord-rich-presence");
 
+interface Credentials {
+    username: string;
+    apiKey: string;
+}
+
+interface Config {
+    discordAppName: string;
+    showButton: boolean;
+}
+
+const defaultConfig: Config = {
+    discordAppName: "defaultDiscordAppID",
+    showButton: true,
+};
+const defaultCredentials: Credentials = {
+    username: "",
+    apiKey: "",
+};
+
 process.env.ROOT = path.join(__dirname, "..");
 process.env.DIST = path.join(process.env.ROOT, "dist-electron");
 process.env.VITE_PUBLIC = process.env.VITE_DEV_SERVER_URL
@@ -28,48 +47,39 @@ const discordAppNameToAppId: Record<string, string> = {
 
 let win: BrowserWindow;
 const preload = path.join(process.env.DIST, "preload.js");
-const updateCredentials = (credentials: any) => {
+
+const updateCredentials = (credentials: Credentials) => {
     fs.writeFileSync(
         path.join(process.env.ROOT, "credentials.json"),
-        JSON.stringify({
-            username: credentials.username,
-            apiKey: credentials.apiKey,
-        })
+        JSON.stringify(credentials)
     );
 };
-const readCredentials = () => {
+
+const readCredentials = (): Credentials => {
     const credentialsPath = path.join(process.env.ROOT, "credentials.json");
     if (fs.existsSync(credentialsPath)) {
         return JSON.parse(fs.readFileSync(credentialsPath).toString());
     } else {
-        updateCredentials({
-            username: "",
-            apiKey: "",
-        });
+        updateCredentials(defaultCredentials);
+        return defaultCredentials;
     }
-    return {
-        username: "",
-        apiKey: "",
-    };
 };
-const updateConfig = (config: any) => {
+
+const updateConfig = (config: Config) => {
     fs.writeFileSync(
         path.join(process.env.ROOT, "config.json"),
-        JSON.stringify({
-            discordAppName: config.discordAppName,
-        })
+        JSON.stringify(Object.assign(defaultConfig, config))
     );
 };
-const readConfig = () => {
+
+const readConfig = (): Config => {
     const configPath = path.join(process.env.ROOT, "config.json");
     if (fs.existsSync(configPath)) {
-        return JSON.parse(fs.readFileSync(configPath).toString());
+        const config = JSON.parse(fs.readFileSync(configPath).toString());
+        return Object.assign(defaultConfig, config);
     }
-    const config = {
-        discordAppName: "defaultDiscordAppID",
-    };
-    updateConfig(config);
-    return config;
+    updateConfig(defaultConfig);
+    return defaultConfig;
 };
 
 var rpc_client = client(discordAppIdToAppName[readConfig().discordAppName]);
@@ -80,23 +90,32 @@ const updateAppId = (discordAppName: string) => {
     } catch (e) {}
     rpc_client = client(discordAppIdToAppName[discordAppName]);
 };
+
 const updatePresence = (track: any) => {
+    let stateArray = [track.artist["#text"]];
+    if (track.album["#text"] !== track.name) {
+        stateArray.push(track.album["#text"]);
+    }
+    const config = readConfig();
     rpc_client.updatePresence({
         details: track.name,
-        state: `${track.artist["#text"]} - ${track.album["#text"]}`,
+        state: stateArray.join(" - "),
         largeImageKey: track.image.at(-1)["#text"],
         largeImageText:
             track.playcount > 1 ? `${track.playcount} plays ` : null,
         instance: true,
         url: track.url,
-        buttons: [
-            {
-                url: track.url,
-                label: "Открыть",
-            },
-        ],
+        buttons: config.showButton
+            ? [
+                  {
+                      url: track.url,
+                      label: "Открыть",
+                  },
+              ]
+            : undefined,
     });
 };
+
 const getTrackInfo = (track: any, lastfm: any, username?: string) => {
     return new Promise((resolve, reject) => {
         lastfm.request("track.getInfo", {
@@ -197,7 +216,7 @@ function bootstrap() {
         });
         trackStream.start();
     };
-    ipcMain.on("update-credentials", (event, arg) => {
+    ipcMain.on("update-credentials", (event, arg: Credentials) => {
         updateCredentials(arg);
         stream(arg.username, arg.apiKey);
     });
@@ -214,7 +233,7 @@ function bootstrap() {
         event.returnValue = discordAppNameToAppId;
     });
 
-    ipcMain.on("update-config", (event, arg) => {
+    ipcMain.on("update-config", (event, arg: Config) => {
         const config = readConfig();
         if (arg.discordAppName !== config.discordAppName) {
             updateAppId(arg.discordAppName);

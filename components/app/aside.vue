@@ -8,13 +8,13 @@
             >
                 <nuxt-link to="/" class="grow">
                     <Icon name="mdi:lastfm" />
-                    <span> Last.fm settings </span>
+                    <span>Настройки last.fm</span>
                 </nuxt-link>
             </UChip>
 
-            <nuxt-link to="/discord">
-                <Icon name="ic:baseline-discord" />
-                <span> Discord settings </span>
+            <nuxt-link to="/display-settings">
+                <Icon name="material-symbols:settings" />
+                <span> Настройки отображения </span>
             </nuxt-link>
             <nuxt-link to="/rich-presence">
                 <Icon name="material-symbols:newspaper-rounded" />
