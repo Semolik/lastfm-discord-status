@@ -22,7 +22,7 @@
     "dependencies": {
         "@nuxt/ui": "^2.11.1",
         "@vueuse/nuxt": "^10.7.1",
-        "discord-rich-presence": "^0.0.8",
+        "@xhayper/discord-rpc": "^1.1.2",
         "lastfm": "^0.9.4"
     }
 }

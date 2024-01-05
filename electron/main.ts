@@ -2,8 +2,7 @@ import { app, BrowserWindow, ipcMain, shell } from "electron";
 import path from "path";
 import fs from "fs";
 const LastFmNode = require("lastfm").LastFmNode;
-const client = require("discord-rich-presence");
-
+import { Client } from "@xhayper/discord-rpc";
 interface Credentials {
     username: string;
     apiKey: string;
@@ -44,9 +43,11 @@ const discordAppNameToAppId: Record<string, string> = {
     playingNowDiscordAppID: "Играет сейчас",
     musicDiscordAppID: "Музыка",
 };
+const preload = path.join(process.env.DIST, "preload.js");
 
 let win: BrowserWindow;
-const preload = path.join(process.env.DIST, "preload.js");
+let client: Client;
+var clientReady = false;
 
 const updateCredentials = (credentials: Credentials) => {
     fs.writeFileSync(
@@ -82,27 +83,28 @@ const readConfig = (): Config => {
     return defaultConfig;
 };
 
-var rpc_client = client(discordAppIdToAppName[readConfig().discordAppName]);
-
-const updateAppId = (discordAppName: string) => {
-    try {
-        rpc_client.disconnect();
-    } catch (e) {}
-    rpc_client = client(discordAppIdToAppName[discordAppName]);
-};
-
-const updatePresence = (track: any) => {
+const updatePresence = async (track: any) => {
+    if (!clientReady) {
+        return;
+    }
     let stateArray = [track.artist["#text"]];
     if (track.album["#text"] !== track.name) {
         stateArray.push(track.album["#text"]);
     }
+    let largeImageText = undefined;
+    if (track.playcount > 1) {
+        largeImageText = `Прослушано ${track.playcount} ${pluralize(
+            track.playcount,
+            ["раз", "раза", "раз"]
+        )}`;
+    }
     const config = readConfig();
     const username = readCredentials().username;
-    rpc_client.updatePresence({
+    await client.user?.setActivity({
         details: track.name,
         state: stateArray.join(" - "),
         largeImageKey: track.image.at(-1)["#text"],
-        largeImageText: getLargeImageText(track.playcount),
+        largeImageText: largeImageText,
         instance: true,
         buttons:
             config.button !== "off"
@@ -115,13 +117,6 @@ const updatePresence = (track: any) => {
     });
 };
 
-const getLargeImageText = (playcount: number) => {
-    if (playcount > 1) {
-        return `Прослушано ${playcount} раз${playcount > 4 ? "" : "а"}`;
-    }
-    return undefined;
-};
-
 const getButtons = (url: string) => {
     return [
         {
@@ -130,7 +125,14 @@ const getButtons = (url: string) => {
         },
     ];
 };
-
+const pluralize = (number: number, words: string[]) => {
+    const cases = [2, 0, 1, 1, 1, 2];
+    return words[
+        number % 100 > 4 && number % 100 < 20
+            ? 2
+            : cases[number % 10 < 5 ? number % 10 : 5]
+    ];
+};
 const getTrackInfo = (track: any, lastfm: any, username?: string) => {
     return new Promise((resolve, reject) => {
         lastfm.request("track.getInfo", {
@@ -174,6 +176,7 @@ function bootstrap() {
 
     var trackStream;
     var interval;
+    var updatePresenceLocal: Function | null = null;
     const stream = (username?: string, apiKey?: string) => {
         if (!username || !apiKey) {
             return;
@@ -190,23 +193,26 @@ function bootstrap() {
         });
 
         trackStream = lastfm.stream(username);
-        let updatePresenceLocal: Function | null = null;
-        const stopCurrentPresence = () => {
+
+        const stopCurrentPresenceUpdate = () => {
             updatePresenceLocal = null;
             if (interval) {
                 clearInterval(interval);
             }
         };
-        trackStream.on("stoppedPlaying", stopCurrentPresence);
+        trackStream.on("stoppedPlaying", () => {
+            stopCurrentPresenceUpdate();
+            client.user?.clearActivity();
+        });
         trackStream.on("nowPlaying", async function (track) {
-            stopCurrentPresence();
+            stopCurrentPresenceUpdate();
             var trackInfo = await getTrackInfo(track, lastfm, username);
             track = {
                 ...track,
                 playcount: trackInfo?.track?.userplaycount || 0,
             };
-            updatePresenceLocal = () => updatePresence(track);
-            updatePresenceLocal();
+            updatePresenceLocal = async () => await updatePresence(track);
+            await updatePresenceLocal();
             interval = setInterval(updatePresenceLocal, 1000 * 15);
         });
 
@@ -231,6 +237,31 @@ function bootstrap() {
         });
         trackStream.start();
     };
+
+    const updateAppId = (discordAppName: string) => {
+        if (client) {
+            try {
+                client.destroy();
+            } catch (e) {}
+        }
+
+        clientReady = false;
+        client = new Client({
+            clientId: discordAppIdToAppName[discordAppName],
+        });
+        try {
+            client.login();
+        } catch (e) {
+            console.log(e);
+        }
+
+        client.on("ready", async () => {
+            clientReady = true;
+            if (updatePresenceLocal) {
+                await updatePresenceLocal();
+            }
+        });
+    };
     ipcMain.on("update-credentials", (event, arg: Credentials) => {
         updateCredentials(arg);
         stream(arg.username, arg.apiKey);
@@ -241,8 +272,6 @@ function bootstrap() {
     ipcMain.on("error", (event, arg) => {
         win.webContents.send("error", arg);
     });
-    const credentials = readCredentials();
-    stream(credentials.username, credentials.apiKey);
 
     ipcMain.on("get-discord-app-ids", (event, arg) => {
         event.returnValue = discordAppNameToAppId;
@@ -254,9 +283,15 @@ function bootstrap() {
             updateAppId(arg.discordAppName);
         }
         updateConfig(arg);
+        updatePresenceLocal && updatePresenceLocal();
     });
     ipcMain.on("read-config", (event, arg) => {
         event.returnValue = readConfig();
     });
+
+    const config = readConfig();
+    updateAppId(config.discordAppName);
+    const { username, apiKey } = readCredentials();
+    stream(username, apiKey);
 }
 app.whenReady().then(bootstrap);
