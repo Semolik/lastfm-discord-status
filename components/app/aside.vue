@@ -1,12 +1,8 @@
 <template>
     <aside>
         <div class="links">
-            <UChip
-                class="flex"
-                :show="usernameErrored || apiKeyErrored"
-                color="red"
-            >
-                <nuxt-link to="/" class="grow">
+            <UChip class="flex" :show="lastfmErrored" color="red">
+                <nuxt-link to="/" :class="['grow', { hover: lastfmErrored }]">
                     <Icon name="mdi:lastfm" />
                     <span>Настройки last.fm</span>
                 </nuxt-link>
@@ -16,13 +12,23 @@
                 <Icon name="material-symbols:settings" />
                 <span> Настройки отображения </span>
             </nuxt-link>
-            <nuxt-link to="/rich-presence">
-                <Icon name="material-symbols:newspaper-rounded" />
-                <span> Discord Rich Presence </span>
-            </nuxt-link>
+            <UChip class="flex" :show="!discordConnected" color="red">
+                <nuxt-link
+                    to="/rich-presence"
+                    :class="['grow', { hover: !discordConnected }]"
+                >
+                    <Icon name="material-symbols:newspaper-rounded" />
+                    <span> Discord Rich Presence </span>
+                </nuxt-link>
+            </UChip>
         </div>
     </aside>
 </template>
+<script setup>
+const lastfmErrored = computed(
+    () => usernameErrored.value || apiKeyErrored.value
+);
+</script>
 <style lang="scss" scoped>
 aside {
     min-width: 250px;
@@ -42,15 +48,14 @@ aside {
             gap: 10px;
             color: $secondary-text;
             text-decoration: none;
-
+            white-space: nowrap;
             padding: 10px;
             border-radius: 5px;
 
             &.router-link-exact-active {
                 background-color: $quaternary-bg;
             }
-
-            &:not(.router-link-exact-active):hover {
+            &:not(.router-link-exact-active):where(.hover, :hover) {
                 background-color: $tertiary-bg;
             }
 

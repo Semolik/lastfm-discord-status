@@ -24,6 +24,10 @@ ipcRenderer.on("error-api-key", (event, arg) => {
     apiKeyErrored.value = true;
     toast.add({ title: "Неверный API-ключ", color: "red" });
 });
+
+ipcRenderer.on("discord-rpc-status", (event, arg) => {
+    discordConnected.value = arg;
+});
 </script>
 <style lang="scss" scoped>
 .app {

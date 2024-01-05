@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from "electron";
+import { app, BrowserWindow, ipcMain, shell, Menu } from "electron";
 import path from "path";
 import fs from "fs";
 const LastFmNode = require("lastfm").LastFmNode;
@@ -82,11 +82,7 @@ const readConfig = (): Config => {
     updateConfig(defaultConfig);
     return defaultConfig;
 };
-
-const updatePresence = async (track: any) => {
-    if (!clientReady) {
-        return;
-    }
+const getActivityJson = (track: any) => {
     let stateArray = [track.artist["#text"]];
     if (track.album["#text"] !== track.name) {
         stateArray.push(track.album["#text"]);
@@ -100,7 +96,7 @@ const updatePresence = async (track: any) => {
     }
     const config = readConfig();
     const username = readCredentials().username;
-    await client.user?.setActivity({
+    return {
         details: track.name,
         state: stateArray.join(" - "),
         largeImageKey: track.image.at(-1)["#text"],
@@ -114,7 +110,15 @@ const updatePresence = async (track: any) => {
                           : `https://www.last.fm/user/${username}`
                   )
                 : undefined,
-    });
+    };
+};
+const updatePresence = async (track: any) => {
+    if (!clientReady) {
+        return;
+    }
+    const activityJson = getActivityJson(track);
+    await client.user?.setActivity(activityJson);
+    win.webContents.send("current-track", activityJson);
 };
 
 const getButtons = (url: string) => {
@@ -153,8 +157,36 @@ const getTrackInfo = (track: any, lastfm: any, username?: string) => {
     });
 };
 
+function setMainMenu() {
+    const template = [
+        {
+            label: "О программе",
+            submenu: [
+                {
+                    label: "Разработчик приложения",
+                    click() {
+                        shell.openExternal("https://github.com/Semolik");
+                    },
+                },
+                {
+                    label: "Github",
+                    click() {
+                        shell.openExternal(
+                            "https://github.com/Semolik/lastfm-discord-status"
+                        );
+                    },
+                },
+            ],
+        },
+    ];
+
+    Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
 function bootstrap() {
     win = new BrowserWindow({
+        width: 650,
+        height: 350,
+        title: "Last.fm Discord Status",
         webPreferences: {
             preload,
             nodeIntegrationInWorker: true,
@@ -162,10 +194,17 @@ function bootstrap() {
             nodeIntegration: true,
             webSecurity: false,
         },
+        resizable: false,
+    });
+    setMainMenu();
+    win.on("page-title-updated", function (e) {
+        e.preventDefault();
     });
     if (process.env.VITE_DEV_SERVER_URL) {
         win.loadURL(process.env.VITE_DEV_SERVER_URL);
-        win.webContents.openDevTools();
+        win.webContents.openDevTools({
+            mode: "detach",
+        });
     } else {
         win.loadFile(path.join(process.env.ROOT, "index.html"));
     }
@@ -177,6 +216,7 @@ function bootstrap() {
     var trackStream;
     var interval;
     var updatePresenceLocal: Function | null = null;
+    var currentTrack: any;
     const stream = (username?: string, apiKey?: string) => {
         if (!username || !apiKey) {
             return;
@@ -187,6 +227,7 @@ function bootstrap() {
         if (interval) {
             clearInterval(interval);
         }
+        currentTrack = null;
         var lastfm = new LastFmNode({
             api_key: apiKey,
             secret: "",
@@ -196,6 +237,7 @@ function bootstrap() {
 
         const stopCurrentPresenceUpdate = () => {
             updatePresenceLocal = null;
+            currentTrack = null;
             if (interval) {
                 clearInterval(interval);
             }
@@ -203,15 +245,17 @@ function bootstrap() {
         trackStream.on("stoppedPlaying", () => {
             stopCurrentPresenceUpdate();
             client.user?.clearActivity();
+            win.webContents.send("current-track", null);
         });
         trackStream.on("nowPlaying", async function (track) {
             stopCurrentPresenceUpdate();
             var trackInfo = await getTrackInfo(track, lastfm, username);
-            track = {
+            currentTrack = {
                 ...track,
                 playcount: trackInfo?.track?.userplaycount || 0,
             };
-            updatePresenceLocal = async () => await updatePresence(track);
+            updatePresenceLocal = async () =>
+                await updatePresence(currentTrack);
             await updatePresenceLocal();
             interval = setInterval(updatePresenceLocal, 1000 * 15);
         });
@@ -237,7 +281,9 @@ function bootstrap() {
         });
         trackStream.start();
     };
-
+    ipcMain.on("get-current-track", (event, arg) => {
+        event.returnValue = currentTrack ? getActivityJson(currentTrack) : null;
+    });
     const updateAppId = (discordAppName: string) => {
         if (client) {
             try {
@@ -252,16 +298,28 @@ function bootstrap() {
         try {
             client.login();
         } catch (e) {
-            console.log(e);
+            win.webContents.send("discord-rpc-status", false);
+            win.webContents.send("error", {
+                message: "Не удалось подключиться к Discord",
+            });
         }
-
+        win.webContents.send("discord-rpc-status", false);
         client.on("ready", async () => {
             clientReady = true;
+            win.webContents.send("discord-rpc-status", true);
             if (updatePresenceLocal) {
                 await updatePresenceLocal();
             }
         });
+        client.on("disconnected", () => {
+            clientReady = false;
+            win.webContents.send("discord-rpc-status", false);
+        });
     };
+    ipcMain.on("reconect-discord", async (event, arg) => {
+        const config = readConfig();
+        updateAppId(config.discordAppName);
+    });
     ipcMain.on("update-credentials", (event, arg: Credentials) => {
         updateCredentials(arg);
         stream(arg.username, arg.apiKey);
@@ -275,6 +333,9 @@ function bootstrap() {
 
     ipcMain.on("get-discord-app-ids", (event, arg) => {
         event.returnValue = discordAppNameToAppId;
+    });
+    ipcMain.on("discord-rpc-status", (event, arg) => {
+        event.returnValue = client.isConnected;
     });
 
     ipcMain.on("update-config", (event, arg: Config) => {
@@ -295,3 +356,10 @@ function bootstrap() {
     stream(username, apiKey);
 }
 app.whenReady().then(bootstrap);
+
+process.on("uncaughtException", (err) => {
+    console.log(err);
+    win.webContents.send("error", {
+        message: err.message,
+    });
+});
