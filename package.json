@@ -4,6 +4,9 @@
     "private": true,
     "license": "MIT",
     "main": "dist-electron/main.js",
+    "author": {
+        "name": "Semolik"
+    },
     "scripts": {
         "dev": "nuxi dev",
         "build": "nuxi build --prerender && electron-builder"
