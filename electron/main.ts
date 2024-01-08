@@ -1,7 +1,6 @@
 import { app, BrowserWindow, ipcMain, shell, Menu } from "electron";
 import path from "path";
 import fs from "fs";
-const AutoLaunch = require("auto-launch");
 const LastFmNode = require("lastfm").LastFmNode;
 import { Client } from "@xhayper/discord-rpc";
 interface Credentials {
@@ -12,7 +11,6 @@ interface Credentials {
 interface Config {
     discordAppName: string;
     button: "off" | "track" | "profile";
-    runOnStartup: boolean;
 }
 
 const defaultConfig: Config = {
@@ -224,6 +222,7 @@ function setMainMenu() {
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 function bootstrap() {
+    var isLaunchedOnStartup = process.argv.indexOf("--hidden") !== -1;
     win = new BrowserWindow({
         width: 650,
         height: 350,
@@ -236,6 +235,7 @@ function bootstrap() {
             webSecurity: false,
         },
         resizable: false,
+        show: !isLaunchedOnStartup,
     });
     setMainMenu();
     win.on("page-title-updated", function (e) {
@@ -369,7 +369,25 @@ function bootstrap() {
     ipcMain.on("error", (event, arg) => {
         win.webContents.send("error", arg);
     });
-
+    ipcMain.on("get-startup-config", (event, arg) => {
+        const startupConfig = app.getLoginItemSettings();
+        event.returnValue = {
+            runOnStartup: startupConfig.openAtLogin,
+            runAsBackground:
+                startupConfig.openAsHidden ||
+                startupConfig.args?.includes("--hidden"),
+        };
+    });
+    ipcMain.on("set-startup-config", (event, arg) => {
+        var startupConfig = {
+            openAtLogin: arg.status,
+        };
+        if (process.platform === "darwin") {
+            startupConfig.openAsHidden = arg.runInBackground;
+        }
+        startupConfig.args = arg.runInBackground ? ["--hidden"] : [];
+        app.setLoginItemSettings(startupConfig);
+    });
     ipcMain.on("get-discord-app-ids", (event, arg) => {
         event.returnValue = discordAppNameToAppId;
     });
@@ -382,27 +400,7 @@ function bootstrap() {
         if (arg.discordAppName !== config.discordAppName) {
             updateAppId(arg.discordAppName);
         }
-        if (arg.runOnStartup !== config.runOnStartup) {
-            const autoLauncher = new AutoLaunch({
-                name: "Last.fm Discord Status",
-                path: app.getPath("exe"),
-            });
-            autoLauncher
-                .isEnabled()
-                .then((isEnabled: boolean) => {
-                    if (arg && !isEnabled) {
-                        autoLauncher.disable();
-                    } else {
-                        autoLauncher.enable();
-                    }
-                })
-                .catch((e: any) => {
-                    console.log(e);
-                    win.webContents.send("error", {
-                        message: "Failed to change auto-launch settings",
-                    });
-                });
-        }
+
         updateConfig(arg);
         updatePresenceLocal && updatePresenceLocal();
     });

@@ -2,15 +2,25 @@
     <app-page title="Настройки приложения">
         <UCheckbox
             label="Запускать приложение при старте"
-            v-model="runOnStartup"
+            v-model="startupConfig.runOnStartup"
+        />
+        <UCheckbox
+            label="Запускать свернутым"
+            v-model="startupConfig.runInBackground"
+            :disabled="!startupConfig.runOnStartup"
         />
     </app-page>
 </template>
 <script setup>
 import { ipcRenderer } from "electron";
-const config = ipcRenderer.sendSync("read-config");
-const runOnStartup = ref(config.runOnStartup);
-watch(runOnStartup, (value) => {
-    ipcRenderer.send("update-config", { ...config, runOnStartup: value });
+const startupConfig = reactive(ipcRenderer.sendSync("get-startup-config"));
+console.log(startupConfig);
+watch(startupConfig, (value) => {
+    ipcRenderer.send("set-startup-config", {
+        status: value.runOnStartup,
+        runInBackground: value.runInBackground,
+    });
+    startupConfig.runOnStartup = value.runOnStartup;
+    startupConfig.runInBackground = value.runOnStartup && value.runInBackground;
 });
 </script>
