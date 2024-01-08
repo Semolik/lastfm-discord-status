@@ -11,11 +11,14 @@ interface Credentials {
 interface Config {
     discordAppName: string;
     button: "off" | "track" | "profile";
+    runOnStartup?: boolean;
+    runAsBackground: boolean;
 }
 
 const defaultConfig: Config = {
     discordAppName: "defaultDiscordAppID",
     button: "track",
+    runAsBackground: false,
 };
 const defaultCredentials: Credentials = {
     username: "",
@@ -66,21 +69,52 @@ const readCredentials = (): Credentials => {
         return defaultCredentials;
     }
 };
-
-const updateConfig = (config: Config) => {
+const writeConfig = (config: Config) => {
     fs.writeFileSync(
         path.join(process.env.ROOT, "config.json"),
-        JSON.stringify(Object.assign(defaultConfig, config))
+        JSON.stringify({
+            ...Object.assign(defaultConfig, config),
+            runOnStartup: undefined,
+        })
     );
+};
+const updateConfig = (config: Config) => {
+    const oldconfig = readConfig();
+    if (oldconfig.discordAppName !== config.discordAppName) {
+        updateAppId(config.discordAppName);
+    }
+    if (
+        config.runOnStartup !== oldconfig.runOnStartup ||
+        config.runAsBackground !== oldconfig.runAsBackground
+    ) {
+        const startupConfig = {
+            openAtLogin: config.runOnStartup,
+        };
+        startupConfig.args =
+            config.runOnStartup && config.runAsBackground ? ["--hidden"] : [];
+        app.setLoginItemSettings(startupConfig);
+    }
+    if (!config.runOnStartup && config.runAsBackground) {
+        config.runAsBackground = false;
+    }
+    writeConfig(config);
 };
 
 const readConfig = (): Config => {
     const configPath = path.join(process.env.ROOT, "config.json");
     if (fs.existsSync(configPath)) {
-        const config = JSON.parse(fs.readFileSync(configPath).toString());
-        return Object.assign(defaultConfig, config);
+        var config = Object.assign(
+            defaultConfig,
+            JSON.parse(fs.readFileSync(configPath).toString())
+        );
+        const runOnStartup = app.getLoginItemSettings().openAtLogin;
+        if (runOnStartup && config.runAsBackground) {
+            config.runAsBackground = false;
+            writeConfig(config);
+        }
+        return config;
     }
-    updateConfig(defaultConfig);
+    writeConfig(defaultConfig);
     return defaultConfig;
 };
 const getActivityJson = (track: any) => {
@@ -175,6 +209,16 @@ function setMainMenu() {
                         shell.openExternal(
                             "https://github.com/Semolik/lastfm-discord-status"
                         );
+                    },
+                },
+                {
+                    type: "separator",
+                },
+                {
+                    label: "Закрыть",
+                    accelerator: "Command+Q",
+                    click() {
+                        app.quit();
                     },
                 },
             ],
@@ -369,25 +413,7 @@ function bootstrap() {
     ipcMain.on("error", (event, arg) => {
         win.webContents.send("error", arg);
     });
-    ipcMain.on("get-startup-config", (event, arg) => {
-        const startupConfig = app.getLoginItemSettings();
-        event.returnValue = {
-            runOnStartup: startupConfig.openAtLogin,
-            runAsBackground:
-                startupConfig.openAsHidden ||
-                startupConfig.args?.includes("--hidden"),
-        };
-    });
-    ipcMain.on("set-startup-config", (event, arg) => {
-        var startupConfig = {
-            openAtLogin: arg.status,
-        };
-        if (process.platform === "darwin") {
-            startupConfig.openAsHidden = arg.runInBackground;
-        }
-        startupConfig.args = arg.runInBackground ? ["--hidden"] : [];
-        app.setLoginItemSettings(startupConfig);
-    });
+
     ipcMain.on("get-discord-app-ids", (event, arg) => {
         event.returnValue = discordAppNameToAppId;
     });
@@ -396,11 +422,6 @@ function bootstrap() {
     });
 
     ipcMain.on("update-config", (event, arg: Config) => {
-        const config = readConfig();
-        if (arg.discordAppName !== config.discordAppName) {
-            updateAppId(arg.discordAppName);
-        }
-
         updateConfig(arg);
         updatePresenceLocal && updatePresenceLocal();
     });
