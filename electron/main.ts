@@ -78,27 +78,6 @@ const writeConfig = (config: Config) => {
         })
     );
 };
-const updateConfig = (config: Config) => {
-    const oldconfig = readConfig();
-    if (oldconfig.discordAppName !== config.discordAppName) {
-        updateAppId(config.discordAppName);
-    }
-    if (
-        config.runOnStartup !== oldconfig.runOnStartup ||
-        config.runAsBackground !== oldconfig.runAsBackground
-    ) {
-        const startupConfig = {
-            openAtLogin: config.runOnStartup,
-        };
-        startupConfig.args =
-            config.runOnStartup && config.runAsBackground ? ["--hidden"] : [];
-        app.setLoginItemSettings(startupConfig);
-    }
-    if (!config.runOnStartup && config.runAsBackground) {
-        config.runAsBackground = false;
-    }
-    writeConfig(config);
-};
 
 const readConfig = (): Config => {
     const configPath = path.join(process.env.ROOT, "config.json");
@@ -108,11 +87,11 @@ const readConfig = (): Config => {
             JSON.parse(fs.readFileSync(configPath).toString())
         );
         const runOnStartup = app.getLoginItemSettings().openAtLogin;
-        if (runOnStartup && config.runAsBackground) {
+        if (!runOnStartup && config.runAsBackground) {
             config.runAsBackground = false;
             writeConfig(config);
         }
-        return config;
+        return { ...config, runOnStartup };
     }
     writeConfig(defaultConfig);
     return defaultConfig;
@@ -266,7 +245,7 @@ function setMainMenu() {
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 function bootstrap() {
-    var isLaunchedOnStartup = process.argv.indexOf("--hidden") !== -1;
+    const openHidden = process.argv.includes("--hidden");
     win = new BrowserWindow({
         width: 650,
         height: 350,
@@ -279,7 +258,7 @@ function bootstrap() {
             webSecurity: false,
         },
         resizable: false,
-        show: !isLaunchedOnStartup,
+        show: !openHidden,
     });
     setMainMenu();
     win.on("page-title-updated", function (e) {
@@ -289,8 +268,8 @@ function bootstrap() {
         win.loadFile(path.join(distPath, "index.html"));
     } else {
         win.loadURL(process.env.VITE_DEV_SERVER_URL!);
+        win.webContents.openDevTools({ mode: "detach" });
     }
-    win.webContents.openDevTools({ mode: "detach" });
     win.webContents.setWindowOpenHandler((details) => {
         shell.openExternal(details.url);
         return { action: "deny" };
@@ -399,6 +378,32 @@ function bootstrap() {
             win.webContents.send("discord-rpc-status", false);
         });
     };
+    const updateConfig = (config: Config) => {
+        const oldconfig = readConfig();
+        if (oldconfig.discordAppName !== config.discordAppName) {
+            updateAppId(config.discordAppName);
+        }
+        if (
+            config.runOnStartup !== oldconfig.runOnStartup ||
+            config.runAsBackground !== oldconfig.runAsBackground
+        ) {
+            app.setLoginItemSettings({
+                openAtLogin: config.runOnStartup,
+                args:
+                    config.runOnStartup && config.runAsBackground
+                        ? ["--hidden"]
+                        : [],
+            });
+        }
+        if (!config.runOnStartup && config.runAsBackground) {
+            config.runAsBackground = false;
+            console.log(
+                "runAsBackground can't be enabled without runOnStartup"
+            );
+        }
+
+        writeConfig(config);
+    };
     ipcMain.on("reconect-discord", async (event, arg) => {
         const config = readConfig();
         updateAppId(config.discordAppName);
@@ -428,7 +433,6 @@ function bootstrap() {
     ipcMain.on("read-config", (event, arg) => {
         event.returnValue = readConfig();
     });
-
     const config = readConfig();
     updateAppId(config.discordAppName);
     const { username, apiKey } = readCredentials();
