@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, shell, Menu } from "electron";
 import path from "path";
 import fs from "fs";
+const AutoLaunch = require("auto-launch");
 const LastFmNode = require("lastfm").LastFmNode;
 import { Client } from "@xhayper/discord-rpc";
 interface Credentials {
@@ -11,6 +12,7 @@ interface Credentials {
 interface Config {
     discordAppName: string;
     button: "off" | "track" | "profile";
+    runOnStartup: boolean;
 }
 
 const defaultConfig: Config = {
@@ -44,6 +46,7 @@ const discordAppNameToAppId: Record<string, string> = {
     musicDiscordAppID: "Музыка",
 };
 const preload = path.join(process.env.DIST, "preload.js");
+const distPath = path.join(__dirname, "../.output/public");
 
 let win: BrowserWindow;
 let client: Client;
@@ -178,6 +181,44 @@ function setMainMenu() {
                 },
             ],
         },
+        {
+            label: "Правка",
+            submenu: [
+                {
+                    label: "Назад",
+                    accelerator: "Command+Z",
+                    selector: "undo:",
+                },
+                {
+                    label: "Вперед",
+                    accelerator: "Shift+Command+Z",
+                    selector: "redo:",
+                },
+                {
+                    type: "separator",
+                },
+                {
+                    label: "Вырезать",
+                    accelerator: "Command+X",
+                    selector: "cut:",
+                },
+                {
+                    label: "Копировать",
+                    accelerator: "Command+C",
+                    selector: "copy:",
+                },
+                {
+                    label: "Вставить",
+                    accelerator: "Command+V",
+                    selector: "paste:",
+                },
+                {
+                    label: "Выделить все",
+                    accelerator: "Command+A",
+                    selector: "selectAll:",
+                },
+            ],
+        },
     ];
 
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));
@@ -200,14 +241,12 @@ function bootstrap() {
     win.on("page-title-updated", function (e) {
         e.preventDefault();
     });
-    if (process.env.VITE_DEV_SERVER_URL) {
-        win.loadURL(process.env.VITE_DEV_SERVER_URL);
-        win.webContents.openDevTools({
-            mode: "detach",
-        });
+    if (app.isPackaged) {
+        win.loadFile(path.join(distPath, "index.html"));
     } else {
-        win.loadFile(path.join(process.env.ROOT, "index.html"));
+        win.loadURL(process.env.VITE_DEV_SERVER_URL!);
     }
+    win.webContents.openDevTools({ mode: "detach" });
     win.webContents.setWindowOpenHandler((details) => {
         shell.openExternal(details.url);
         return { action: "deny" };
@@ -343,6 +382,27 @@ function bootstrap() {
         if (arg.discordAppName !== config.discordAppName) {
             updateAppId(arg.discordAppName);
         }
+        if (arg.runOnStartup !== config.runOnStartup) {
+            const autoLauncher = new AutoLaunch({
+                name: "Last.fm Discord Status",
+                path: app.getPath("exe"),
+            });
+            autoLauncher
+                .isEnabled()
+                .then((isEnabled: boolean) => {
+                    if (arg && !isEnabled) {
+                        autoLauncher.disable();
+                    } else {
+                        autoLauncher.enable();
+                    }
+                })
+                .catch((e: any) => {
+                    console.log(e);
+                    win.webContents.send("error", {
+                        message: "Failed to change auto-launch settings",
+                    });
+                });
+        }
         updateConfig(arg);
         updatePresenceLocal && updatePresenceLocal();
     });
@@ -356,10 +416,3 @@ function bootstrap() {
     stream(username, apiKey);
 }
 app.whenReady().then(bootstrap);
-
-process.on("uncaughtException", (err) => {
-    console.log(err);
-    win.webContents.send("error", {
-        message: err.message,
-    });
-});

@@ -8,7 +8,6 @@
                 size="md"
             />
         </app-input-wrapper>
-
         <app-input-wrapper label="Кнопка">
             <USelect
                 v-model="configProxy.button"

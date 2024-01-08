@@ -9,7 +9,7 @@
             </UChip>
 
             <nuxt-link to="/display-settings">
-                <Icon name="material-symbols:settings" />
+                <Icon name="material-symbols:video-settings-rounded" />
                 <span> Настройки отображения </span>
             </nuxt-link>
             <UChip class="flex" :show="!discordConnected" color="red">
@@ -21,6 +21,10 @@
                     <span> Discord Rich Presence </span>
                 </nuxt-link>
             </UChip>
+            <nuxt-link to="/settings">
+                <Icon name="material-symbols:settings-rounded" />
+                <span> Настройки приложения </span>
+            </nuxt-link>
         </div>
     </aside>
 </template>
