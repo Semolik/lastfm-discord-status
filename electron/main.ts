@@ -193,51 +193,20 @@ function setMainMenu() {
                 {
                     type: "separator",
                 },
-                {
-                    label: "Закрыть",
-                    accelerator: "Command+Q",
-                    click() {
-                        app.quit();
-                    },
-                },
+
+                { label: "Закрыть", role: "quit" },
             ],
         },
         {
             label: "Правка",
             submenu: [
-                {
-                    label: "Назад",
-                    accelerator: "Command+Z",
-                    selector: "undo:",
-                },
-                {
-                    label: "Вперед",
-                    accelerator: "Shift+Command+Z",
-                    selector: "redo:",
-                },
-                {
-                    type: "separator",
-                },
-                {
-                    label: "Вырезать",
-                    accelerator: "Command+X",
-                    selector: "cut:",
-                },
-                {
-                    label: "Копировать",
-                    accelerator: "Command+C",
-                    selector: "copy:",
-                },
-                {
-                    label: "Вставить",
-                    accelerator: "Command+V",
-                    selector: "paste:",
-                },
-                {
-                    label: "Выделить все",
-                    accelerator: "Command+A",
-                    selector: "selectAll:",
-                },
+                { label: "Назад", role: "undo" },
+                { label: "Вперед", role: "redo" },
+                { type: "separator" },
+                { label: "Вырезать", role: "cut" },
+                { label: "Копировать", role: "copy" },
+                { label: "Вставить", role: "paste" },
+                { label: "Выделить все", role: "selectAll" },
             ],
         },
     ];
