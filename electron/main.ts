@@ -1,9 +1,18 @@
-import { app, BrowserWindow, ipcMain, shell, Menu } from "electron";
+import {
+    app,
+    BrowserWindow,
+    ipcMain,
+    shell,
+    Tray,
+    Menu,
+    nativeImage,
+} from "electron";
 import path from "path";
 import fs from "fs";
-const LastFmNode = require("lastfm").LastFmNode;
 import { Client } from "@xhayper/discord-rpc";
 import { createServer } from "http";
+const LastFmNode = require("lastfm").LastFmNode;
+const unhandled = require("electron-unhandled");
 const handler = require("serve-handler");
 interface Credentials {
     username: string;
@@ -88,12 +97,12 @@ const readConfig = (): Config => {
             defaultConfig,
             JSON.parse(fs.readFileSync(configPath).toString())
         );
-        const runOnStartup = app.getLoginItemSettings().openAtLogin;
-        if (!runOnStartup && config.runAsBackground) {
+
+        if (!config.runOnStartup && config.runAsBackground) {
             config.runAsBackground = false;
             writeConfig(config);
         }
-        return { ...config, runOnStartup };
+        return { ...config };
     }
     writeConfig(defaultConfig);
     return defaultConfig;
@@ -232,9 +241,49 @@ function bootstrap() {
         show: !openHidden,
     });
     setMainMenu();
+    const icon = nativeImage.createFromPath(
+        path.join(process.env.VITE_PUBLIC, "MdiLastfm.png")
+    );
+    const tray = new Tray(icon);
+    const getContextMenu = (hided: boolean) =>
+        Menu.buildFromTemplate([
+            hided
+                ? {
+                      label: "Открыть",
+                      click: () => {
+                          win.show();
+                          tray.setContextMenu(getContextMenu(false));
+                      },
+                  }
+                : {
+                      label: "Скрыть",
+                      click: () => {
+                          win.hide();
+                          tray.setContextMenu(getContextMenu(true));
+                      },
+                  },
+            {
+                label: "Выход",
+                click: () => {
+                    app.quit();
+                },
+            },
+        ]);
+
+    tray.setToolTip("Last.fm Discord Status");
+    tray.setContextMenu(getContextMenu(openHidden));
     win.on("page-title-updated", function (e) {
         e.preventDefault();
     });
+
+    win.on("show", function () {
+        tray.setContextMenu(getContextMenu(false));
+    });
+
+    win.on("hide", function () {
+        tray.setContextMenu(getContextMenu(true));
+    });
+
     if (process.env.VITE_DEV_SERVER_URL) {
         win.loadURL(process.env.VITE_DEV_SERVER_URL);
         win.webContents.openDevTools({ mode: "detach" });
@@ -418,3 +467,21 @@ function bootstrap() {
     stream(username, apiKey);
 }
 app.whenReady().then(bootstrap);
+
+app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") app.quit();
+});
+unhandled({
+    logger: (error) => {
+        if (error.code === 2) {
+            win.webContents.send("discord-rpc-status", false);
+            win.webContents.send("error", {
+                message: "Не удалось подключиться к Discord",
+            });
+        } else {
+            win.webContents.send("error", {
+                message: error.message,
+            });
+        }
+    },
+});
