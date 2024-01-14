@@ -3,6 +3,8 @@ import path from "path";
 import fs from "fs";
 const LastFmNode = require("lastfm").LastFmNode;
 import { Client } from "@xhayper/discord-rpc";
+import { createServer } from "http";
+const handler = require("serve-handler");
 interface Credentials {
     username: string;
     apiKey: string;
@@ -233,11 +235,19 @@ function bootstrap() {
     win.on("page-title-updated", function (e) {
         e.preventDefault();
     });
-    if (app.isPackaged) {
-        win.loadFile(path.join(distPath, "index.html"));
-    } else {
-        win.loadURL(process.env.VITE_DEV_SERVER_URL!);
+    if (process.env.VITE_DEV_SERVER_URL) {
+        win.loadURL(process.env.VITE_DEV_SERVER_URL);
         win.webContents.openDevTools({ mode: "detach" });
+    } else {
+        const server = createServer((req, res) => {
+            return handler(req, res, {
+                public: process.env.VITE_PUBLIC,
+            });
+        });
+
+        server.listen(1111, () => {
+            win.loadURL("http://localhost:1111/");
+        });
     }
     win.webContents.setWindowOpenHandler((details) => {
         shell.openExternal(details.url);
