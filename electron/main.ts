@@ -473,15 +473,17 @@ app.on("window-all-closed", () => {
 });
 unhandled({
     logger: (error) => {
-        if (error.code === 2) {
-            win.webContents.send("discord-rpc-status", false);
-            win.webContents.send("error", {
-                message: "Не удалось подключиться к Discord",
-            });
-        } else {
-            win.webContents.send("error", {
-                message: error.message,
-            });
-        }
+        try {
+            if (error.code === 2) {
+                win.webContents.send("discord-rpc-status", false);
+                win.webContents.send("error", {
+                    message: "Не удалось подключиться к Discord",
+                });
+            } else {
+                win.webContents.send("error", {
+                    message: error.message,
+                });
+            }
+        } catch (e) {}
     },
 });
