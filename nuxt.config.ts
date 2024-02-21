@@ -21,7 +21,11 @@ export default defineNuxtConfig({
             },
         },
     },
-
+    router: {
+        options: {
+            hashMode: !process.env.VITE_DEV_SERVER_URL,
+        },
+    },
     electron: {
         build: [
             {

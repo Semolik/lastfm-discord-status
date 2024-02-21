@@ -10,10 +10,10 @@ import {
 import path from "path";
 import fs from "fs";
 import { Client } from "@xhayper/discord-rpc";
-import { createServer } from "http";
+
 const LastFmNode = require("lastfm").LastFmNode;
 const unhandled = require("electron-unhandled");
-const handler = require("serve-handler");
+
 interface Credentials {
     username: string;
     apiKey: string;
@@ -288,15 +288,7 @@ function bootstrap() {
         win.loadURL(process.env.VITE_DEV_SERVER_URL);
         win.webContents.openDevTools({ mode: "detach" });
     } else {
-        const server = createServer((req, res) => {
-            return handler(req, res, {
-                public: process.env.VITE_PUBLIC,
-            });
-        });
-
-        server.listen(1111, () => {
-            win.loadURL("http://localhost:1111/");
-        });
+        win.loadFile(path.join(distPath, "index.html"));
     }
     win.webContents.setWindowOpenHandler((details) => {
         shell.openExternal(details.url);

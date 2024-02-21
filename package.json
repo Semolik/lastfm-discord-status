@@ -1,7 +1,7 @@
 {
     "name": "lastfm-discord-status",
     "productName": "Last.fm Discord Status",
-    "version": "0.0.0",
+    "version": "0.0.1",
     "private": true,
     "license": "MIT",
     "main": "dist-electron/main.js",
